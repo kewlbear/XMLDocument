@@ -21,7 +21,7 @@
 //
 
 import Foundation
-import libxml2
+import libxml2XMLDocument
 
 func todo() {
     fatalError()

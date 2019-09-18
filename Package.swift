@@ -38,12 +38,13 @@ let package = Package(
     targets: [
         .target(
             name: "XMLDocument",
-            dependencies: ["libxml2"]),
+            dependencies: ["libxml2XMLDocument"]),
         .testTarget(
             name: "XMLDocumentTests",
             dependencies: ["XMLDocument"]),
         .systemLibrary(
-            name: "libxml2",
+            name: "libxml2XMLDocument",
+            path: "Sources/libxml2",
             pkgConfig: "libxml-2.0",
             providers: [
                 .brew(["libxml2"]),
