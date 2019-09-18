@@ -39,7 +39,11 @@ open class XMLDocument: XMLNode {
         return Data()
     }
     
-    let docPtr: xmlDocPtr?
+    override var docPtr: xmlDocPtr? {
+        return _docPtr
+    }
+    
+    let _docPtr: xmlDocPtr?
     
     @objc
     public init(data: Data, options: Int) throws {
@@ -53,9 +57,15 @@ open class XMLDocument: XMLNode {
         let url: String = ""
         let option = 0
         // FIXME: xmlParseMemory?
-        docPtr = xmlReadDoc(UnsafeRawPointer(cur).assumingMemoryBound(to: xmlChar.self), url, charsetName, CInt(option))
+        _docPtr = xmlReadDoc(UnsafeRawPointer(cur).assumingMemoryBound(to: xmlChar.self), url, charsetName, CInt(option))
         
         super.init(nodePtr: nil, owner: nil)
+    }
+    
+    deinit {
+        if owner == nil, let doc = _docPtr {
+            xmlFreeDoc(doc)
+        }
     }
     
     public convenience init(xmlString: String, options: Int) throws {
@@ -174,6 +184,10 @@ open class XMLNode {
     
     var owner: XMLNode?
     
+    var docPtr: xmlDocPtr? {
+        return nodePtr?.pointee.doc
+    }
+    
     init(nodePtr: xmlNodePtr?, owner: XMLNode?) {
         self.nodePtr = nodePtr
         self.owner = owner
@@ -186,7 +200,7 @@ open class XMLNode {
     }
     
     open func nodes(forXPath xpath: String) throws -> [XMLNode] {
-        let ctxt = nodePtr.flatMap { xmlXPathNewContext($0.pointee.doc) }
+        let ctxt = docPtr.flatMap { xmlXPathNewContext($0) }
         if ctxt == nil {
             throw XMLError.noMemory
         }

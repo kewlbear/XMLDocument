@@ -24,12 +24,18 @@ import XCTest
 @testable import XMLDocument
 
 final class XMLDocumentTests: XCTestCase {
-    func testExample() {
+    func testInitWithData() {
         let data = "<x>Hello, World!</x>".data(using: .utf8)!
         XCTAssertEqual(try XMLDocument(data: data, options: 0).rootElement()?.stringValue, "Hello, World!")
     }
 
+    func testNodesForXPath() {
+        let data = "<x>Hello, World!</x>".data(using: .utf8)!
+        XCTAssertEqual(try XMLDocument(data: data, options: 0).nodes(forXPath: "/").first?.stringValue, "Hello, World!")
+    }
+    
     static var allTests = [
-        ("testExample", testExample),
+        ("testInitWithData", testInitWithData),
+        ("testNodesForXPath", testNodesForXPath),
     ]
 }
