@@ -33,7 +33,6 @@ public enum XMLError: Error {
     case libxml2
 }
 
-@objc(NSXMLDocument)
 open class XMLDocument: XMLNode {
     open var xmlData: Data {
         todo()
@@ -71,7 +70,6 @@ open class XMLDocument: XMLNode {
     }
 }
 
-@objc(NSXMLElement)
 open class XMLElement: XMLNode {
     
     public convenience init(name: String, stringValue string: String? = nil) {
@@ -124,8 +122,7 @@ open class XMLElement: XMLNode {
     }
 }
 
-@objc(NSXMLNode)
-open class XMLNode: NSObject {
+open class XMLNode {
     open class func element(withName name: String) -> Any {
         return ""
     }
@@ -188,7 +185,6 @@ open class XMLNode: NSObject {
         }
     }
     
-    @objc
     open func nodes(forXPath xpath: String) throws -> [XMLNode] {
         let ctxt = nodePtr.flatMap { xmlXPathNewContext($0.pointee.doc) }
         if ctxt == nil {
