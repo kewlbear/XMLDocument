@@ -27,15 +27,15 @@ func todo() {
     fatalError()
 }
 
-enum XMLError: Error {
+public enum XMLError: Error {
     case invalidStringEncoding
     case noMemory
     case libxml2
 }
 
 @objc(NSXMLDocument)
-class XMLDocument: XMLNode {
-    var xmlData: Data {
+open class XMLDocument: XMLNode {
+    open var xmlData: Data {
         todo()
         return Data()
     }
@@ -43,7 +43,7 @@ class XMLDocument: XMLNode {
     let docPtr: xmlDocPtr?
     
     @objc
-    init(data: Data, options: Int) throws {
+    public init(data: Data, options: Int) throws {
         let encoding: String.Encoding = .utf8
         let xml = String(data: data, encoding: encoding)
         
@@ -59,22 +59,22 @@ class XMLDocument: XMLNode {
         super.init(nodePtr: nil, owner: nil)
     }
     
-    convenience init(xmlString: String, options: Int) throws {
+    public convenience init(xmlString: String, options: Int) throws {
         guard let data = xmlString.data(using: .utf8) else { fatalError() }
         
         try self.init(data: data, options: options)
     }
     
-    func rootElement() -> XMLElement? {
+    open func rootElement() -> XMLElement? {
         let root = docPtr.flatMap { xmlDocGetRootElement($0) }
         return root.map { XMLElement(nodePtr: $0, owner: self) }
     }
 }
 
 @objc(NSXMLElement)
-class XMLElement: XMLNode {
+open class XMLElement: XMLNode {
     
-    convenience init(name: String, stringValue string: String? = nil) {
+    public convenience init(name: String, stringValue string: String? = nil) {
         let node = xmlNewNode(nil, name)
         assert(node != nil)
         
@@ -87,7 +87,7 @@ class XMLElement: XMLNode {
         super.init(nodePtr: nodePtr, owner: owner)
     }
     
-    func attribute(forName name: String) -> XMLNode? {
+    open func attribute(forName name: String) -> XMLNode? {
         var _attr = nodePtr?.pointee.properties
         
         repeat {
@@ -111,38 +111,38 @@ class XMLElement: XMLNode {
         return nil
     }
     
-    func addChild(_ child: XMLNode) {
+    open func addChild(_ child: XMLNode) {
         todo()
     }
     
-    func addAttribute(_ attribute: XMLNode) {
+    open func addAttribute(_ attribute: XMLNode) {
         todo()
     }
     
-    func removeAttribute(forName name: String) {
+    open func removeAttribute(forName name: String) {
         todo()
     }
 }
 
 @objc(NSXMLNode)
-class XMLNode: NSObject {
-    class func element(withName name: String) -> Any {
+open class XMLNode: NSObject {
+    open class func element(withName name: String) -> Any {
         return ""
     }
     
-    class func element(withName name: String, stringValue string: String) -> Any {
+    open class func element(withName name: String, stringValue string: String) -> Any {
         return ""
     }
     
-    class func attribute(withName name: String, stringValue: String) -> Any {
+    open class func attribute(withName name: String, stringValue: String) -> Any {
         return ""
     }
     
-    class func text(withStringValue stringValue: String) -> Any {
+    open class func text(withStringValue stringValue: String) -> Any {
         return ""
     }
     
-    var stringValue: String? {
+    open var stringValue: String? {
         get {
             return nodePtr.flatMap {
                 let content = xmlNodeGetContent($0)
@@ -161,15 +161,15 @@ class XMLNode: NSObject {
         }
     }
     
-    var children: [XMLNode]?
+    open var children: [XMLNode]?
     
-    var name: String?
+    open var name: String?
     
-    var xmlString: String {
+    open var xmlString: String {
         return ""
     }
     
-    var parent: XMLNode? {
+    open var parent: XMLNode? {
         return nil
     }
     
@@ -189,7 +189,7 @@ class XMLNode: NSObject {
     }
     
     @objc
-    func nodes(forXPath xpath: String) throws -> [XMLNode] {
+    open func nodes(forXPath xpath: String) throws -> [XMLNode] {
         let ctxt = nodePtr.flatMap { xmlXPathNewContext($0.pointee.doc) }
         if ctxt == nil {
             throw XMLError.noMemory
@@ -229,7 +229,7 @@ class XMLNode: NSObject {
         return nodes
     }
     
-    func detach() {
+    open func detach() {
         
     }
 }
