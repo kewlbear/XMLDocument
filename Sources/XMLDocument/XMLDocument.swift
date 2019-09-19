@@ -39,10 +39,6 @@ open class XMLDocument: XMLNode {
         return Data()
     }
     
-    override var docPtr: xmlDocPtr? {
-        return _docPtr
-    }
-    
     let _docPtr: xmlDocPtr?
     
     @objc
@@ -75,8 +71,13 @@ open class XMLDocument: XMLNode {
     }
     
     open func rootElement() -> XMLElement? {
-        let root = docPtr.flatMap { xmlDocGetRootElement($0) }
+        let root = _docPtr.flatMap { xmlDocGetRootElement($0) }
         return root.map { XMLElement(nodePtr: $0, owner: self) }
+    }
+    
+    override func withNodePtr<Result>(body: (xmlNodePtr?) throws -> Result) rethrows -> Result {
+        guard let pointer = _docPtr else { return try body(nil) }
+        return try pointer.withMemoryRebound(to: xmlNode.self, capacity: 1, body)
     }
 }
 
@@ -96,7 +97,7 @@ open class XMLElement: XMLNode {
     }
     
     open func attribute(forName name: String) -> XMLNode? {
-        var _attr = nodePtr?.pointee.properties
+        var _attr = withNodePtr { $0?.pointee.properties }
         
         repeat {
             guard let attr = _attr else {
@@ -151,20 +152,24 @@ open class XMLNode {
     
     open var stringValue: String? {
         get {
-            return nodePtr.flatMap {
-                let content = xmlNodeGetContent($0)
-                defer {
-                    xmlFree(content)
+            return withNodePtr {
+                $0.flatMap {
+                    let content = xmlNodeGetContent($0)
+                    defer {
+                        xmlFree(content)
+                    }
+                    return content.flatMap { String(utf8String: UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)) }
                 }
-                return content.flatMap { String(utf8String: UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)) }
             }
         }
         
         set {
-            guard let node = nodePtr else { fatalError() }
-            let escaped = xmlEncodeSpecialChars(node.pointee.doc, newValue ?? "")
-            xmlNodeSetContent(node, escaped)
-            xmlFree(escaped)
+            withNodePtr {
+                guard let node = $0 else { fatalError() }
+                let escaped = xmlEncodeSpecialChars(node.pointee.doc, newValue ?? "")
+                xmlNodeSetContent(node, escaped)
+                xmlFree(escaped)
+            }
         }
     }
     
@@ -180,66 +185,68 @@ open class XMLNode {
         return nil
     }
     
-    let nodePtr: xmlNodePtr?
+    var _nodePtr: xmlNodePtr?
     
     var owner: XMLNode?
     
-    var docPtr: xmlDocPtr? {
-        return nodePtr?.pointee.doc
-    }
-    
     init(nodePtr: xmlNodePtr?, owner: XMLNode?) {
-        self.nodePtr = nodePtr
+        _nodePtr = nodePtr
         self.owner = owner
     }
     
     deinit {
-        if owner == nil, let node = nodePtr {
+        if owner == nil, let node = _nodePtr {
             xmlFreeNode(node)
         }
     }
     
     open func nodes(forXPath xpath: String) throws -> [XMLNode] {
-        let ctxt = docPtr.flatMap { xmlXPathNewContext($0) }
-        if ctxt == nil {
-            throw XMLError.noMemory
-        }
-        ctxt?.pointee.node = nodePtr
-        
-//        if let nsDictionary = namespaces {
-//            for (ns, name) in nsDictionary {
-//                xmlXPathRegisterNs(ctxt, ns, name)
+        return try withNodePtr { nodePtr in
+            let ctxt = nodePtr.flatMap { xmlXPathNewContext($0.pointee.doc) }
+            if ctxt == nil {
+                throw XMLError.noMemory
+            }
+            ctxt?.pointee.node = nodePtr
+            
+//            if let nsDictionary = namespaces {
+//                for (ns, name) in nsDictionary {
+//                    xmlXPathRegisterNs(ctxt, ns, name)
+//                }
 //            }
-//        }
-        
-        let result = xmlXPathEvalExpression(xpath, ctxt)
-        defer {
-            xmlXPathFreeObject(result)
-        }
-        xmlXPathFreeContext(ctxt)
-        
-        guard let nodeSet = result?.pointee.nodesetval else {
-            throw XMLError.libxml2
-        }
-        
-        let count = Int(nodeSet.pointee.nodeNr)
-        guard count > 0 else {
-            return []
-        }
-        
-        var nodes: [XMLNode] = []
-        
-        for index in 0..<count {
-            guard let node = nodeSet.pointee.nodeTab?[index] else {
+            
+            let result = xmlXPathEvalExpression(xpath, ctxt)
+            defer {
+                xmlXPathFreeObject(result)
+            }
+            xmlXPathFreeContext(ctxt)
+            
+            guard let nodeSet = result?.pointee.nodesetval else {
                 throw XMLError.libxml2
             }
-            nodes.append(XMLNode(nodePtr: node, owner: self))
+            
+            let count = Int(nodeSet.pointee.nodeNr)
+            guard count > 0 else {
+                return []
+            }
+            
+            var nodes: [XMLNode] = []
+            
+            for index in 0..<count {
+                guard let node = nodeSet.pointee.nodeTab?[index] else {
+                    throw XMLError.libxml2
+                }
+                nodes.append(XMLNode(nodePtr: node, owner: self))
+            }
+            
+            return nodes
         }
-        
-        return nodes
     }
     
     open func detach() {
         
+    }
+    
+    func withNodePtr<Result>(body: (xmlNodePtr?) throws -> Result) rethrows -> Result {
+        return try body(_nodePtr)
     }
 }
