@@ -25,7 +25,9 @@ import XCTest
 
 final class XMLDocumentTests: XCTestCase {
     let hello = """
+        <?xml version="1.0" encoding="UTF-8"?>
         <x a="y">Hello, World!</x>
+        
         """
     
     func testInitWithData() {
@@ -47,9 +49,96 @@ final class XMLDocumentTests: XCTestCase {
             "y")
     }
     
+    func testXMLString() {
+        XCTAssertEqual(
+            try document(content: hello).nodes(forXPath: "/").first?.xmlString,
+            hello)
+    }
+    
+    func testChildren() {
+        XCTAssertEqual(
+            try document(content: hello).children?.count,
+            1)
+    }
+    
+    func testName() {
+        XCTAssertEqual(
+            try document(content: hello).rootElement()?.name,
+            "x")
+    }
+    
+    func testParent() {
+        XCTAssertEqual(
+            try document(content: hello).nodes(forXPath: "//text()").first?.parent?.name,
+            "x")
+    }
+        
+    func testDetach() throws {
+        let node = try document(content: hello).nodes(forXPath: "//text()").first!
+        node.detach()
+        XCTAssertNil(node.parent)
+    }
+    
+    func testElementWithName() {
+        let element = XMLNode.element(withName: "a") as! XMLElement
+        XCTAssertEqual(element.name, "a")
+    }
+    
+    func testElementWithNameStringValue() {
+        let element = XMLNode.element(withName: "a", stringValue: "v") as! XMLElement
+        XCTAssertEqual(element.name, "a")
+        XCTAssertEqual(element.stringValue, "v")
+    }
+    
+    func testAttributeWithNameStringValue() {
+        let attribute = XMLNode.attribute(withName: "a", stringValue: "v") as! XMLNode
+        XCTAssertEqual(attribute.name, "a")
+        XCTAssertEqual(attribute.stringValue, "v")
+    }
+    
+    func testTextWithStringValue() {
+        let text = XMLNode.text(withStringValue: "text") as! XMLNode
+        XCTAssertEqual(text.stringValue, "text")
+    }
+    
+    func testAddChild() {
+        let element = XMLNode.element(withName: "e") as! XMLElement
+        element.addChild(XMLNode.text(withStringValue: "t") as! XMLNode)
+        XCTAssertEqual(element.children?.count, 1)
+    }
+    
+    func testAddAttribute() {
+        let element = XMLNode.element(withName: "e") as! XMLElement
+        let name = "n"
+        let value = "v"
+        element.addAttribute(XMLNode.attribute(withName: name, stringValue: value) as! XMLNode)
+        XCTAssertEqual(element.attribute(forName: name)?.stringValue, value)
+    }
+    
+    func testRemoveAttribute() {
+        let element = XMLNode.element(withName: "e") as! XMLElement
+        let name = "n"
+        let value = "v"
+        element.addAttribute(XMLNode.attribute(withName: name, stringValue: value) as! XMLNode)
+        element.removeAttribute(forName: name)
+        XCTAssertNil(element.attribute(forName: name))
+    }
+    
     static var allTests = [
         ("testInitWithData", testInitWithData),
         ("testNodesForXPath", testNodesForXPath),
+        ("testReturnsElement", testReturnsElement),
+        ("testXMLString", testXMLString),
+        ("testChildren", testChildren),
+        ("testName", testName),
+        ("testParent", testParent),
+        ("testDetach", testDetach),
+        ("testElementWithName", testElementWithName),
+        ("testElementWithNameStringValue", testElementWithNameStringValue),
+        ("testAttributeWithNameStringValue", testAttributeWithNameStringValue),
+        ("testTextWithStringValue", testTextWithStringValue),
+        ("testAddAttribute", testAddAttribute),
+        ("testRemoveAttribute", testRemoveAttribute),
     ]
     
     func document(content: String) throws -> XMLDocument {

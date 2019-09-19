@@ -23,10 +23,6 @@
 import Foundation
 import libxml2XMLDocument
 
-func todo() {
-    fatalError()
-}
-
 public enum XMLError: Error {
     case invalidStringEncoding
     case noMemory
@@ -35,11 +31,10 @@ public enum XMLError: Error {
 
 open class XMLDocument: XMLNode {
     open var xmlData: Data {
-        todo()
-        return Data()
+        return xmlString.data(using: .utf8) ?? Data()
     }
     
-    let _docPtr: xmlDocPtr?
+    private let _docPtr: xmlDocPtr?
     
     @objc
     public init(data: Data, options: Int) throws {
@@ -84,21 +79,22 @@ open class XMLDocument: XMLNode {
 open class XMLElement: XMLNode {
 
     class Attribute: XMLNode {
-        let pointer: xmlAttrPtr
+        private let pointer: xmlAttrPtr?
         
-        init(pointer: xmlAttrPtr, owner: XMLNode) {
+        init(pointer: xmlAttrPtr?, owner: XMLNode?) {
             self.pointer = pointer
             
             super.init(nodePtr: nil, owner: owner)
         }
         
         deinit {
-            if owner == nil {
+            if owner == nil, let pointer = pointer {
                 xmlFreeProp(pointer)
             }
         }
         
         override func withNodePtr<Result>(body: (xmlNodePtr?) throws -> Result) rethrows -> Result {
+            guard let pointer = pointer else { return try body(nil) }
             return try pointer.withMemoryRebound(to: xmlNode.self, capacity: 1, body)
         }
     }
@@ -141,33 +137,92 @@ open class XMLElement: XMLNode {
     }
     
     open func addChild(_ child: XMLNode) {
-        todo()
+        withNodePtr { parent in
+            child.withNodePtr {
+                guard let element = parent, let cur = $0 else {
+                    assertionFailure()
+                    return
+                }
+                xmlAddChild(element, cur)
+                
+                child.owner = self
+            }
+        }
     }
     
     open func addAttribute(_ attribute: XMLNode) {
-        todo()
+        withNodePtr { parent in
+            attribute.withNodePtr {
+                guard let element = parent, let cur = $0 else {
+                    assertionFailure()
+                    return
+                }
+                xmlAddChild(element, cur)
+                
+                attribute.owner = self
+            }
+        }
+    }
+    
+    fileprivate func detach(_ attribute: UnsafeMutablePointer<_xmlAttr>) {
+        let parent = attribute.pointee.parent
+        
+        if attribute.pointee.prev == nil {
+            if attribute.pointee.next == nil {
+                parent?.pointee.properties = nil
+            } else {
+                parent?.pointee.properties = attribute.pointee.next
+                attribute.pointee.next.pointee.prev = nil
+            }
+        } else {
+            if attribute.pointee.next == nil {
+                attribute.pointee.prev.pointee.next = nil
+            } else {
+                attribute.pointee.prev.pointee.next = attribute.pointee.next
+                attribute.pointee.next.pointee.prev = attribute.pointee.prev
+            }
+        }
+        
+        attribute.pointee.parent = nil
+        attribute.pointee.prev = nil
+        attribute.pointee.next = nil
+        attribute.pointee.ns = nil
     }
     
     open func removeAttribute(forName name: String) {
-        todo()
+        withNodePtr {
+            var pointer = $0?.pointee.properties
+            while let attribute = pointer {
+                if xmlStrEqual(attribute.pointee.name, name) != 0 {
+                    detach(attribute)
+                    return
+                }
+                
+                pointer = attribute.pointee.next
+            }
+        }
     }
 }
 
 open class XMLNode {
     open class func element(withName name: String) -> Any {
-        return ""
+        return XMLElement(name: name)
     }
     
     open class func element(withName name: String, stringValue string: String) -> Any {
-        return ""
+        return XMLElement(name: name, stringValue: string)
     }
     
     open class func attribute(withName name: String, stringValue: String) -> Any {
-        return ""
+        let pointer = xmlNewProp(nil, name, stringValue)
+        assert(pointer != nil)
+        return XMLElement.Attribute(pointer: pointer, owner: nil)
     }
     
     open class func text(withStringValue stringValue: String) -> Any {
-        return ""
+        let pointer = xmlNewText(stringValue)
+        assert(pointer != nil)
+        return XMLNode(nodePtr: pointer, owner: nil)
     }
     
     open var stringValue: String? {
@@ -193,19 +248,51 @@ open class XMLNode {
         }
     }
     
-    open var children: [XMLNode]?
+    open var children: [XMLNode]? {
+        var children: [XMLNode] = []
+        
+        withNodePtr {
+            var pointer = $0?.pointee.children
+            while let child = pointer {
+                children.append(makeNode(pointer: child))
+                pointer = child.pointee.next
+            }
+        }
+        
+        return children
+    }
     
-    open var name: String?
+    open var name: String? {
+        return withNodePtr {
+            return $0?.pointee.name.map { String(cString: $0) }
+        }
+    }
     
     open var xmlString: String {
-        return ""
+        return withNodePtr { node in
+            guard let buffer = xmlBufferCreate() else {
+                return ""
+            }
+            defer {
+                xmlBufferFree(buffer)
+            }
+
+            let count = xmlNodeDump(buffer, node?.pointee.doc, node, 0, 0)
+
+            if count < 0 {
+                return ""
+            }
+            return String(cString: buffer.pointee.content)
+        }
     }
     
     open var parent: XMLNode? {
-        return nil
+        return withNodePtr {
+            $0?.pointee.parent.map { makeNode(pointer: $0) }
+        }
     }
     
-    var _nodePtr: xmlNodePtr?
+    private var _nodePtr: xmlNodePtr?
     
     var owner: XMLNode?
     
@@ -255,9 +342,7 @@ open class XMLNode {
                 guard let node = nodeSet.pointee.nodeTab?[index] else {
                     throw XMLError.libxml2
                 }
-                nodes.append(node.pointee.type == XML_ELEMENT_NODE ?
-                    XMLElement(nodePtr: node, owner: self) :
-                    XMLNode(nodePtr: node, owner: self))
+                nodes.append(makeNode(pointer: node))
             }
             
             return nodes
@@ -265,10 +350,48 @@ open class XMLNode {
     }
     
     open func detach() {
-        
+        withNodePtr {
+            guard let child = $0 else {
+                return
+            }
+            
+            let parent = child.pointee.parent
+            
+            if child.pointee.prev == nil {
+                if child.pointee.next == nil {
+                    parent?.pointee.children = nil
+                    parent?.pointee.last = nil
+                } else {
+                    parent?.pointee.children = child.pointee.next
+                    child.pointee.next.pointee.prev = nil
+                }
+            } else {
+                if child.pointee.next == nil {
+                    parent?.pointee.last = child.pointee.prev
+                    child.pointee.prev.pointee.next = nil
+                } else {
+                    child.pointee.prev.pointee.next = child.pointee.next
+                    child.pointee.next.pointee.prev = child.pointee.prev
+                }
+            }
+            
+            child.pointee.parent = nil
+            child.pointee.prev = nil
+            child.pointee.next = nil
+        }
     }
     
     func withNodePtr<Result>(body: (xmlNodePtr?) throws -> Result) rethrows -> Result {
         return try body(_nodePtr)
+    }
+    
+    func makeNode(pointer: xmlNodePtr) -> XMLNode {
+        switch pointer.pointee.type {
+        case XML_ELEMENT_NODE:
+            return XMLElement(nodePtr: pointer, owner: self)
+        // TODO: attr, ...
+        default:
+            return XMLNode(nodePtr: pointer, owner: self)
+        }
     }
 }
