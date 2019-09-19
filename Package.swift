@@ -39,6 +39,8 @@ let package = Package(
         .target(
             name: "XMLDocument",
             dependencies: ["libxml2XMLDocument"]),
+        .target(
+            name: "XML"),
         .testTarget(
             name: "XMLDocumentTests",
             dependencies: ["XMLDocument"]),
