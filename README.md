@@ -1,6 +1,8 @@
 # XMLDocument
 
-An implementation of XMLDocument from Foundation for iOS.
+This Swift package implements some parts of XMLDocument and related classes from Foundation for iOS.
+
+You can use it to parse XML documents.
 
 ## Usage
 
