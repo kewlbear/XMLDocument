@@ -82,6 +82,26 @@ open class XMLDocument: XMLNode {
 }
 
 open class XMLElement: XMLNode {
+
+    class Attribute: XMLNode {
+        let pointer: xmlAttrPtr
+        
+        init(pointer: xmlAttrPtr, owner: XMLNode) {
+            self.pointer = pointer
+            
+            super.init(nodePtr: nil, owner: owner)
+        }
+        
+        deinit {
+            if owner == nil {
+                xmlFreeProp(pointer)
+            }
+        }
+        
+        override func withNodePtr<Result>(body: (xmlNodePtr?) throws -> Result) rethrows -> Result {
+            return try pointer.withMemoryRebound(to: xmlNode.self, capacity: 1, body)
+        }
+    }
     
     public convenience init(name: String, stringValue string: String? = nil) {
         let node = xmlNewNode(nil, name)
@@ -106,11 +126,11 @@ open class XMLElement: XMLNode {
 
             if attr.pointee.ns != nil && attr.pointee.ns.pointee.prefix != nil {
                 if xmlStrQEqual(attr.pointee.ns.pointee.prefix, attr.pointee.name, name) != 0 {
-                    return nil // FIXME: attr
+                    return Attribute(pointer: attr, owner: self)
                 }
             } else {
                 if xmlStrEqual(attr.pointee.name, name) != 0 {
-                    return nil // FIXME: attr
+                    return Attribute(pointer: attr, owner: self)
                 }
             }
             
@@ -235,7 +255,9 @@ open class XMLNode {
                 guard let node = nodeSet.pointee.nodeTab?[index] else {
                     throw XMLError.libxml2
                 }
-                nodes.append(XMLNode(nodePtr: node, owner: self))
+                nodes.append(node.pointee.type == XML_ELEMENT_NODE ?
+                    XMLElement(nodePtr: node, owner: self) :
+                    XMLNode(nodePtr: node, owner: self))
             }
             
             return nodes
