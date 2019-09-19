@@ -24,11 +24,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "JebiXML",
+    name: "XMLDocument",
     products: [
         // Products define the executables and libraries produced by a package, and make them visible to other packages.
         .library(
-            name: "XMLDocument",
+            name: "JebiXML",
             targets: ["XMLDocument"]),
     ],
     dependencies: [
