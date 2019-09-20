@@ -21,7 +21,7 @@
 //
 
 import XCTest
-@testable import XMLDocument
+@testable import JebiXML
 
 final class XMLDocumentTests: XCTestCase {
     let hello = """
